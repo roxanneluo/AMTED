@@ -13,8 +13,11 @@
 #include "socket_lib.hpp"
 #include "client_lib.hpp"
 
+#define PIPE_READ 0
+#define PIPE_WRITE 1
+
 constexpr int NUM = 16;
-constexpr int ENUM = NUM+1;
+constexpr int ENUM = NUM * 2 + 1;
 constexpr int MAX_FN_BUFFER_SIZE = 256; // FN: filename
 
 void closeClient(cfd_t cfd, ClientMap* clients) {
@@ -22,71 +25,93 @@ void closeClient(cfd_t cfd, ClientMap* clients) {
   clients->erase(cfd);
 }
 
-int main (int argc, char *argv[])
-{
+
+void add_epoll_read_event(int efd, int fd, struct epoll_event *ep_event) {
+  ep_event->data.fd = sfd;
+  ep_event->events = EPOLLIN | EPOLLET;
+  int s = epoll_ctl(efd, EPOLL_CTL_ADD, fd, ep_event);
+  if (s == -1) {
+    perror("epoll_ctl");
+    exit(EXIT_FAILURE);
+  }
+}
+
+
+int main (int argc, char *argv[]) {
   int sfd, s;
   int efd;
   ClientMap clients;
   char fn_buffer[MAX_FN_BUFFER_SIZE];
+  int pipes[NUM][2];
 
-  if (argc != 3)
-    {
-      fprintf (stderr, "Usage: %s [ip] [port]\n", argv[0]);
-      exit (EXIT_FAILURE);
-    }
+  if (argc != 3) {
+    fprintf(stderr, "Usage: %s [ip] [port]\n", argv[0]);
+    exit(EXIT_FAILURE);
+  }
 
-  sfd = create_and_bind (argv[1], argv[2]);
-  if (sfd == -1)
-    abort ();
+  // handle SIGPIPE from send
+  // if the socket has been closed by either side, the process calling send()
+  // will get the signal SIGPIPE. (Unless send() was called with the
+  // MSG_NOSIGNAL flag.)
+  struct sigaction new_action;
+  new_action.sa_handler = SIG_IGN;
+  sigemptyset(&new_action.sa_mask);
+  new_action.sa_flags = 0;
+  sigaction(SIGPIPE, &new_action, NULL);
 
-  s = make_socket_non_blocking (sfd);
-  if (s == -1)
-    abort ();
+  sfd = create_and_bind(argv[1], argv[2]);
+  if (sfd == -1) {
+    exit(EXIT_FAILURE);
+  }
 
-  s = listen (sfd, SOMAXCONN);
-  if (s == -1)
-    {
-      perror ("listen");
-      abort ();
-    }
+  s = make_socket_non_blocking(sfd);
+  if (s == -1) {
+    exit(EXIT_FAILURE);
+  }
 
-  efd = epoll_create1 (0);
-  if (efd == -1)
-    {
-      perror ("epoll_create");
-      abort ();
-    }
+  s = listen(sfd, SOMAXCONN);
+  if (s == -1) {
+    perror("listen");
+    exit(EXIT_FAILURE);
+  }
+
+  efd = epoll_create1(0);
+  if (efd == -1) {
+    perror("epoll_create");
+    exit(EXIT_FAILURE);
+  }
 
   struct epoll_event socket_event;
-  socket_event.data.fd = sfd;
-  socket_event.events = EPOLLIN | EPOLLET;
-  s = epoll_ctl (efd, EPOLL_CTL_ADD, sfd, &socket_event);
-  if (s == -1)
-    {
-      perror ("epoll_ctl");
-      abort ();
-    }
+  add_epoll_read_event(efd, sfd, &socket_event);
 
-  // TODO
+
   // create NUM pipes and NUM threads
   // add in pipes in monitoring events
 
+  for (int i = 0; i < NUM; i++) {
+    pipe(pipes[i])
+    struct epoll_event pipe_read_event;
+    add_epoll_read_event(efd, pipes[i][PIPE_READ], &pipe_read_event);
+  }
+
   /* Buffer where events are returned */
-  struct epoll_event *events = (epoll_event*)calloc (ENUM, sizeof socket_event);
+  struct epoll_event *events = (epoll_event*) calloc(ENUM, sizeof socket_event);
 
   /* The event loop */
   while (1) {
-    int n = epoll_wait (efd, events,ENUM, -1);
+    int n = epoll_wait(efd, events,ENUM, -1);
+
     for (int i = 0; i < n; i++) {
       int fd = events[i].data.fd;
-      if ((events[i].events & EPOLLERR) || 
-          (events[i].events & EPOLLHUP)) {
-          /* An error has occured on this fd, or the socket is not
-             ready for reading (why were we notified then?) */
-          fprintf (stderr, "epoll error\n");
+
+      if ((events[i].events & EPOLLERR) || (events[i].events & EPOLLHUP)) {
+        /* An error has occured on this fd, or the socket is not
+           ready for reading (why were we notified then?) */
+        fprintf(stderr, "epoll error\n");
+
         // TODO: better failure tolerance. e.g., I don't want to close a pipe
-          close (events[i].data.fd);
-          continue;
+        close(events[i].data.fd);
+        continue;
       } 
       
       if (sfd == fd) {
@@ -99,7 +124,7 @@ int main (int argc, char *argv[])
       
       // test if fd is one of the clients
       auto iter = clients.find(fd);
-      if (iter != clients.end() && events[i].events & EPOLLIN) {
+      if (iter != clients.end() && (events[i].events & EPOLLIN)) {
         // read filename
         cfd_t cfd = fd;
         int fn_len = readFilename(cfd, fn_buffer, sizeof(fn_buffer));
@@ -125,7 +150,7 @@ int main (int argc, char *argv[])
         struct epoll_event event;
         event.data.fd = cfd;
         event.events = EPOLLOUT;  // does LT/ET really matter in sending mode?
-        s = epoll_ctl (efd, EPOLL_CTL_MOD, cfd, &event);
+        s = epoll_ctl(efd, EPOLL_CTL_MOD, cfd, &event);
         if (s == -1) {
           perror("epoll_ctl for write");
           closeClient(cfd, &clients);
@@ -133,10 +158,6 @@ int main (int argc, char *argv[])
         continue;
       }
 
-      // TODO: handle SIGPIPE from send
-      // if the socket has been closed by either side, the process calling send()
-      // will get the signal SIGPIPE. (Unless send() was called with the
-      // MSG_NOSIGNAL flag.)
       if (iter != clients.end() && events[i].events & EPOLLOUT) {
         // ready to send
         cfd_t cfd = fd;
@@ -150,9 +171,8 @@ int main (int argc, char *argv[])
     }
   }
 
-  free (events);
-
-  close (sfd);
+  free(events);
+  close(sfd);
 
   return EXIT_SUCCESS;
 }
