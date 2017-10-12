@@ -1,4 +1,4 @@
-all: server
+all: server client
 
 server:
 	g++ server.cpp -o 550server -std=c++11

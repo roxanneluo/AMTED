@@ -8,7 +8,10 @@ constexpr int MAX_BUFFER_SIZE = 2097152 + 20; // 2MB + 20 for safe
 using cfd_t = int; // client file descriptor 
 
 struct ClientState {
+  // for read in file content
   char buffer[MAX_BUFFER_SIZE];
+  // total size of content read in buffer
+  int size;
   int write_offset = 0;
 };
 
