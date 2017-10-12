@@ -1,3 +1,6 @@
+#ifndef __SOCKET_LIB__
+#define __SOCKET_LIB__
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,8 +12,10 @@
 #include <sys/epoll.h>
 #include <errno.h>
 
-#ifndef __SOCKET_LIB__
-#define __SOCKET_LIB__
+#include "client_lib.hpp"
+
+using sfd_t = int; // socket file descriptor
+using efd_t = int;
 
 int make_socket_non_blocking (int sfd)
 {
@@ -78,6 +83,65 @@ int create_and_bind (const char* ip, const char *port)
 
   return sfd;
 }
+
+bool accept_clients(sfd_t sfd, ClientMap* clients, efd_t efd) {
+
+  while (1)
+  {
+    struct sockaddr in_addr;
+    socklen_t in_len;
+    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
+    int s;
+
+    in_len = sizeof in_addr;
+    cfd_t cfd = accept (sfd, &in_addr, &in_len);
+    if (cfd == -1)
+      {
+        if ((errno == EAGAIN) ||
+            (errno == EWOULDBLOCK))
+          {
+            /* We have processed all incoming
+               connections. */
+            return true;
+          }
+        else
+          {
+            perror ("accept");
+            return false;
+          }
+      }
+
+    s = getnameinfo (&in_addr, in_len,
+                     hbuf, sizeof hbuf,
+                     sbuf, sizeof sbuf,
+                     NI_NUMERICHOST | NI_NUMERICSERV);
+    if (s == 0)
+    {
+      printf("Accepted connection on descriptor %d "
+             "(host=%s, port=%s)\n", cfd, hbuf, sbuf);
+    }
+
+    /* Make the incoming socket non-blocking and add it to the
+       list of fds to monitor. */
+    s = make_socket_non_blocking (cfd);
+    if (s == -1)
+      abort (); //TODO: handle failure better?
+
+    // add to clients
+    (*clients)[cfd] = ClientState();
+
+    struct epoll_event event;
+    event.data.fd = cfd;
+    event.events = EPOLLIN | EPOLLET;
+    s = epoll_ctl (efd, EPOLL_CTL_ADD, cfd, &event);
+    if (s == -1)
+      {
+        perror ("epoll_ctl");
+        abort ();
+      }
+  }
+}
+
 
 #endif
 
