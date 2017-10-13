@@ -93,9 +93,9 @@ bool accept_clients(sfd_t sfd, ClientMap* clients, efd_t efd) {
     }
 
     status = getnameinfo (&in_addr, in_len,
-                          hbuf, sizeof hbuf,
-                          sbuf, sizeof sbuf,
-                          NI_NUMERICHOST | NI_NUMERICSERV);
+        hbuf, sizeof hbuf,
+        sbuf, sizeof sbuf,
+        NI_NUMERICHOST | NI_NUMERICSERV);
     if (status == 0) {
       printf("Accepted connection\n");
     }
@@ -127,7 +127,7 @@ int readFilename(cfd_t cfd, char* buffer, int max_size) {
   int len = 0;
   while (1) {
     ssize_t count = recv(cfd, buffer + len, sizeof max_size, 0);
-    
+
     if (count == 0) {
       /* End of file. The remote has closed the
          connection. */
@@ -153,7 +153,7 @@ int readFilename(cfd_t cfd, char* buffer, int max_size) {
 bool sendData(cfd_t cfd, ClientState* client) {
   while (1) {
     ssize_t count = send(cfd, client->buffer + client->write_offset, 
-                         client->size - client->write_offset, 0);
+        client->size - client->write_offset, 0);
     if (count == -1) return false;
 
     client->write_offset += count;
@@ -167,7 +167,7 @@ int readFilename(cfd_t cfd, char* buffer, int max_size) {
   int len = 0;
   while (1) {
     ssize_t count = recv(cfd, buffer + len, sizeof max_size, 0);
-    
+
     if (count == 0) {
       // End of file. The remote has closed the connection.
       return 0;
@@ -193,13 +193,33 @@ int readFilename(cfd_t cfd, char* buffer, int max_size) {
 bool sendData(cfd_t cfd, ClientState* client) {
   while (1) {
     ssize_t count = send(cfd, client->buffer + client->write_offset, 
-                         client->size - client->write_offset, 0);
+        client->size - client->write_offset, 0);
     if (count == -1) return false;
 
     client->write_offset += count;
     if (client->write_offset >= client->size)
       return true;
   }
+}
+
+size_t readFile(char* filename, char* buffer) {
+  size_t fileSize = 0;
+  if (FILE *fp = fopen("filename", "r")) {
+    size_t len;
+    while (1) {
+      len = fread(buffer, 1, sizeof(buffer), fp);
+      if (len > 0) {
+        fileSize += len;
+      } else {
+        break;
+      }
+    }
+    fclose(fp);
+  } else {
+    perror("fopen");
+    return -1;
+  }
+  return len
 }
 
 
