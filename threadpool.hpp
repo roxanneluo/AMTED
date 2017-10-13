@@ -12,24 +12,25 @@
 using pfd_t = int;
 using job_t = std::function<void(pfd_t)>; 
 
-template <unsigned int ThreadCount>
+
+void* worker(void * argument);
+
 class ThreadPool {
  public:
-  ThreadPool();
+  ThreadPool(int N);
   ~ThreadPool();
 
-  const std::array<pfd_t, ThreadCount>& inputPipes() const {
+  const std::vector<pfd_t>& inputPipes() const {
     return m_inputPipes;
   }
 
   void addTask(const job_t& task);
 
- protected:
-  void * worker(pfd_t pipe_out);
+  friend void* worker(void * argument);
 
  protected:
-  std::array<pfd_t, ThreadCount> m_inputPipes;
-  std::array<pthread_t, ThreadCount> m_threads;
+  std::vector<pfd_t> m_inputPipes;
+  std::vector<pthread_t> m_threads;
   std::queue<job_t>  m_taskQueue;
 
   /**
@@ -48,56 +49,64 @@ class ThreadPool {
 #include <fcntl.h>
 #include <unistd.h>
 
-template <unsigned int N>
-void * ThreadPool<N>::worker(pfd_t pipe_out) {
-  while (1) {
-    pthread_mutex_lock(&mutex);        
+struct arg_struct {
+  pfd_t pipe_out;
+  ThreadPool* pool;
+};
 
-    while (m_taskQueue.empty()) {
-        pthread_cond_wait(&cond, &mutex);
+void* worker(void * argument) {
+  struct arg_struct *args = (struct arg_struct *)argument;
+  pfd_t pipe_out = args->pipe_out;
+  ThreadPool* thread_pool = args->pool;
+  while (1) {
+    pthread_mutex_lock(&(thread_pool->mutex));        
+
+    while (thread_pool->m_taskQueue.empty()) {
+        pthread_cond_wait(&(thread_pool->cond),
+                          &(thread_pool->mutex));
     }
 
-    job_t& task = m_taskQueue.front();
-    m_taskQueue.pop();
+    job_t& task = thread_pool->m_taskQueue.front();
+    thread_pool->m_taskQueue.pop();
     
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&(thread_pool->mutex));
 
     /* do work */
     task(pipe_out);
   }
 }
 
-template <unsigned int N>
-ThreadPool<N>::ThreadPool() {
+ThreadPool::ThreadPool(int N)
+  : m_threads(N) {
   constexpr int kRead = 0, kWrite = 1;
 
   pthread_cond_init(&cond, NULL);
   pthread_mutex_init(&mutex, NULL);
 
-  auto func = [this](pfd_t pipe_out) { worker(pipe_out); };
   for(int i = 0; i < N; i++) {
     pfd_t pipes[2];
     pipe(pipes);
-    m_inputPipes[i] = pipes[kRead];
+    m_inputPipes.push_back(pipes[kRead]);
 
-    if (pthread_create(&(m_threads[i]), NULL, (void* (*)(void*))&func, (void*)(pipes[kWrite])) != 0) {
+    struct arg_struct args;
+    args.pipe_out = pipes[kWrite];
+    args.pool = this;
+    if (pthread_create(&(m_threads[i]), NULL, worker, (void*)(&args)) != 0) {
       perror("pthread_create");
       exit(EXIT_FAILURE);
     }
   }
 }
 
-template <unsigned int N>
-ThreadPool<N>::~ThreadPool() {
-  for (int i = 0; i < N; ++i) {
+ThreadPool::~ThreadPool() {
+  for (int i = 0; i < m_threads.size(); ++i) {
     pthread_join(m_threads[i], NULL);
   }
   pthread_mutex_destroy(&mutex);
   pthread_cond_destroy(&cond);
 }
 
-template <unsigned int N>
-void ThreadPool<N>::addTask(const job_t& job) {
+void ThreadPool::addTask(const job_t& job) {
   pthread_mutex_lock(&mutex);
   m_taskQueue.push(job);
   pthread_mutex_unlock(&mutex);

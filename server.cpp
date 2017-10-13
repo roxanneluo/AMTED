@@ -89,7 +89,7 @@ int main (int argc, char *argv[]) {
 
   // create NUM pipes and NUM threads
   // add in pipes in monitoring events
-  ThreadPool<NUM> thread_pool;
+  ThreadPool thread_pool(NUM);
   auto input_pipes = thread_pool.inputPipes();
 
   for (int i = 0; i < NUM; i++) {
