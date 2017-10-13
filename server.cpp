@@ -9,9 +9,11 @@
 #include <sys/epoll.h>
 #include <errno.h>
 #include <iostream>
+#include <signal.h>
 
 #include "socket_lib.hpp"
 #include "client_lib.hpp"
+#include "threadpool.hpp"
 
 #define PIPE_READ 0
 #define PIPE_WRITE 1
@@ -27,7 +29,7 @@ void closeClient(cfd_t cfd, ClientMap* clients) {
 
 
 void add_epoll_read_event(int efd, int fd, struct epoll_event *ep_event) {
-  ep_event->data.fd = sfd;
+  ep_event->data.fd = fd;
   ep_event->events = EPOLLIN | EPOLLET;
   int s = epoll_ctl(efd, EPOLL_CTL_ADD, fd, ep_event);
   if (s == -1) {
@@ -87,11 +89,12 @@ int main (int argc, char *argv[]) {
 
   // create NUM pipes and NUM threads
   // add in pipes in monitoring events
+  ThreadPool<NUM> thread_pool;
+  auto input_pipes = thread_pool.inputPipes();
 
   for (int i = 0; i < NUM; i++) {
-    pipe(pipes[i])
     struct epoll_event pipe_read_event;
-    add_epoll_read_event(efd, pipes[i][PIPE_READ], &pipe_read_event);
+    add_epoll_read_event(efd, input_pipes[i], &pipe_read_event);
   }
 
   /* Buffer where events are returned */
@@ -136,6 +139,18 @@ int main (int argc, char *argv[]) {
 
         printf("client %d's filename is %s\n", cfd, fn_buffer);
 
+        ClientState& client = iter->second;
+        auto job = [cfd, fn_buffer, &client](pfd_t pipe_out) {
+          client.size  = readFile(fn_buffer, client.buffer);
+          cfd_t cfd_to_write = cfd;
+          ssize_t count = write(pipe_out, reinterpret_cast<void*>(&cfd_to_write), sizeof(cfd));
+          if (count <= 0) {
+            perror("error writing to pipe\n");
+            close(pipe_out);
+            close(cfd);
+          }
+        };
+        thread_pool.addTask(job);
         // TODO: use one of the threads in the thread pool to read from file
         // and save the data into iter->second.buffer and write cfd into pipe
         continue;
@@ -144,7 +159,7 @@ int main (int argc, char *argv[]) {
       if (iter == clients.end()) {
         // fd is from pipe and and some thread has finished reading file content
         cfd_t cfd;
-        int count = read(fd /*pipe fd*/, reinterpret_cast<char*>(&cfd), sizeof(cfd));
+        int count = read(fd /*pipe fd*/, reinterpret_cast<void*>(&cfd), sizeof(cfd));
         auto citer = clients.find(cfd);
         assert(citer != clients.end());
         struct epoll_event event;
