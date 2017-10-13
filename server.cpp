@@ -86,7 +86,6 @@ int main (int argc, char *argv[]) {
   struct epoll_event socket_event;
   add_epoll_read_event(efd, sfd, &socket_event);
 
-
   // create NUM pipes and NUM threads
   // add in pipes in monitoring events
   ThreadPool thread_pool(NUM);
@@ -141,7 +140,7 @@ int main (int argc, char *argv[]) {
 
         ClientState& client = iter->second;
         auto job = [cfd, fn_buffer, &client](pfd_t pipe_out) {
-          client.size  = readFile(fn_buffer, client.buffer);
+          client.size = readFile(fn_buffer, client.buffer);
           cfd_t cfd_to_write = cfd;
           ssize_t count = write(pipe_out, reinterpret_cast<void*>(&cfd_to_write), sizeof(cfd));
           if (count <= 0) {
@@ -151,8 +150,7 @@ int main (int argc, char *argv[]) {
           }
         };
         thread_pool.addTask(job);
-        // TODO: use one of the threads in the thread pool to read from file
-        // and save the data into iter->second.buffer and write cfd into pipe
+
         continue;
       }
 

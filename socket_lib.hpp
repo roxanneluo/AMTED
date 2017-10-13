@@ -152,22 +152,26 @@ int readFilename(cfd_t cfd, char* buffer, int max_size) {
 // return succeeded in writing out all the data or not
 bool sendData(cfd_t cfd, ClientState* client) {
   while (1) {
-    ssize_t count = send(cfd, client->buffer + client->write_offset, 
+    ssize_t count = send(cfd, client->buffer + client->write_offset,
         client->size - client->write_offset, 0);
-    if (count == -1) return false;
+    if (count == -1 && errno != EAGAIN && errno != EWOULDBLOCK) return false;
+
+    printf("sending %d bytes\n", count);
 
     client->write_offset += count;
+    if (count == -1) return false;
     if (client->write_offset >= client->size)
       return true;
   }
 }
 
 size_t readFile(const char* filename, char* buffer) {
+  printf("reading file\n");
   size_t fileSize = 0;
-  if (FILE *fp = fopen("filename", "r")) {
+  if (FILE *fp = fopen(filename, "r")) {
     size_t len;
     while (1) {
-      len = fread(buffer, 1, sizeof(buffer), fp);
+      len = fread(buffer + fileSize, 1, sizeof(buffer), fp);
       if (len > 0) {
         fileSize += len;
       } else {
@@ -175,7 +179,8 @@ size_t readFile(const char* filename, char* buffer) {
       }
     }
     fclose(fp);
-    return len;
+    printf("file content: %s\n", buffer);
+    return fileSize;
   }
 
   perror("fopen");
