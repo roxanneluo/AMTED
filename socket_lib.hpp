@@ -114,7 +114,7 @@ bool accept_clients(sfd_t sfd, ClientMap* clients, efd_t efd) {
     struct epoll_event event;
     event.data.fd = cfd;
     event.events = EPOLLIN | EPOLLET;
-    s = epoll_ctl(efd, EPOLL_CTL_ADD, cfd, &event);
+    ssize_t s = epoll_ctl(efd, EPOLL_CTL_ADD, cfd, &event);
     if (s == -1) {
       perror("epoll_ctl");
       exit(EXIT_FAILURE);
@@ -161,47 +161,6 @@ bool sendData(cfd_t cfd, ClientState* client) {
       return true;
   }
 }
-
-
-int readFilename(cfd_t cfd, char* buffer, int max_size) {
-  int len = 0;
-  while (1) {
-    ssize_t count = recv(cfd, buffer + len, sizeof max_size, 0);
-    
-    if (count == 0) {
-      // End of file. The remote has closed the connection.
-      return 0;
-    }
-
-    if (count == -1) {
-      /* If errno == EAGAIN, that means we have read all
-         data. So go back to the main loop. */
-      if (errno != EAGAIN) {
-        perror ("read filename");
-        return 0;
-      }
-      return len;
-    }
-
-    len += count;
-  }
-  return -1;
-}
-
-
-// return succeeded in writing out all the data or not
-bool sendData(cfd_t cfd, ClientState* client) {
-  while (1) {
-    ssize_t count = send(cfd, client->buffer + client->write_offset, 
-                         client->size - client->write_offset, 0);
-    if (count == -1) return false;
-
-    client->write_offset += count;
-    if (client->write_offset >= client->size)
-      return true;
-  }
-}
-
 
 #endif
 
