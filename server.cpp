@@ -15,9 +15,8 @@
 #include "client_lib.hpp"
 #include "threadpool.hpp"
 
-#define PIPE_READ 0
-#define PIPE_WRITE 1
-
+constexpr int PIPE_READ = 0;
+constexpr int PIPE_WRITE = 1;
 constexpr int NUM = 16;
 constexpr int ENUM = NUM * 2 + 1;
 constexpr int MAX_FN_BUFFER_SIZE = 256; // FN: filename

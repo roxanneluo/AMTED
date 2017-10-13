@@ -66,6 +66,7 @@ void* worker(void * argument) {
                           &(thread_pool->mutex));
     }
 
+
     job_t& task = thread_pool->m_taskQueue.front();
     thread_pool->m_taskQueue.pop();
     
@@ -83,7 +84,7 @@ ThreadPool::ThreadPool(int N)
   pthread_cond_init(&cond, NULL);
   pthread_mutex_init(&mutex, NULL);
 
-  for(int i = 0; i < N; i++) {
+  for (int i = 0; i < N; i++) {
     pfd_t pipes[2];
     pipe(pipes);
     m_inputPipes.push_back(pipes[kRead]);
@@ -109,8 +110,8 @@ ThreadPool::~ThreadPool() {
 void ThreadPool::addTask(const job_t& job) {
   pthread_mutex_lock(&mutex);
   m_taskQueue.push(job);
-  pthread_mutex_unlock(&mutex);
   pthread_cond_signal(&cond);
+  pthread_mutex_unlock(&mutex);
 }
 
 
