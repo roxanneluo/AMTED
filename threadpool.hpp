@@ -67,6 +67,7 @@ void* worker(void * argument) {
                           &(thread_pool->mutex));
     }
 
+
     job_t& task = thread_pool->m_taskQueue.front();
     thread_pool->m_taskQueue.pop();
     
@@ -89,7 +90,7 @@ ThreadPool::ThreadPool(int N)
 
   static auto args_arr = std::make_unique<arg_struct[]>(N); 
 
-  for(int i = 0; i < N; i++) {
+  for (int i = 0; i < N; i++) {
     pfd_t pipes[2];
     if (pipe(pipes)) {
       perror("error creating pipes");
