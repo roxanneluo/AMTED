@@ -91,7 +91,7 @@ int main (int argc, char *argv[]) {
   ThreadPool thread_pool(NUM);
   auto input_pipes = thread_pool.inputPipes();
 
-  for (int i = 0; i < NUM; i++) {
+  for (int i = 0; i < input_pipes.size(); i++) {
     struct epoll_event pipe_read_event;
     add_epoll_read_event(efd, input_pipes[i], &pipe_read_event);
   }

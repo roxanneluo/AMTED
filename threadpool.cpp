@@ -1,50 +1,4 @@
-#ifndef __THREAD_POOL_LIB__
-#define __THREAD_POOL_LIB__
-
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <array>
-#include <queue>
-#include <functional>
-#include <memory>
-
-// pipe file descriptor
-using pfd_t = int;
-using job_t = std::function<void(pfd_t)>; 
-
-
-void* worker(void * argument);
-
-class ThreadPool {
- public:
-  ThreadPool(int N);
-  ~ThreadPool();
-
-  const std::vector<pfd_t>& inputPipes() const {
-    return m_inputPipes;
-  }
-
-  void addTask(const job_t& task);
-
-  friend void* worker(void * argument);
-
- protected:
-  std::vector<pfd_t> m_inputPipes;
-  std::vector<pthread_t> m_threads;
-  std::queue<job_t>  m_taskQueue;
-
-  /**
-   * thread condition variable.
-   */
-  pthread_cond_t cond;
-
-  /**
-   * thread mutex lock.
-   */
-  pthread_mutex_t mutex;
-};
-
+#include "threadpool.hpp"
 
 #include <cassert>
 #include <fcntl.h>
@@ -80,31 +34,24 @@ void* worker(void * argument) {
 ThreadPool::ThreadPool(int N)
   : m_threads(N) {
   constexpr int kRead = 0, kWrite = 1;
-  
-  printf("create cond\n");
-  pthread_cond_init(&cond, NULL);
-  printf("create mutex");
-  pthread_mutex_init(&mutex, NULL);
-  printf("done create mutex");
 
-  static auto args_arr = std::make_unique<arg_struct[]>(N); 
+  pthread_cond_init(&cond, NULL);
+  pthread_mutex_init(&mutex, NULL);
 
   for(int i = 0; i < N; i++) {
+    printf("creating thread %d\n", i);
     pfd_t pipes[2];
-    if (pipe(pipes)) {
-      perror("error creating pipes");
-      exit(-1);
-    }
-
+    pipe(pipes);
     m_inputPipes.push_back(pipes[kRead]);
 
-    auto& args = args_arr[i];
+    struct arg_struct args;
     args.pipe_out = pipes[kWrite];
     args.pool = this;
     if (pthread_create(&(m_threads[i]), NULL, worker, (void*)(&args)) != 0) {
       perror("pthread_create");
       exit(EXIT_FAILURE);
     }
+    printf("created thread %d\n", i);
   }
 }
 
@@ -112,7 +59,6 @@ ThreadPool::~ThreadPool() {
   for (int i = 0; i < m_threads.size(); ++i) {
     pthread_join(m_threads[i], NULL);
   }
-  printf("destroy\n");
   pthread_mutex_destroy(&mutex);
   pthread_cond_destroy(&cond);
 }
@@ -120,9 +66,7 @@ ThreadPool::~ThreadPool() {
 void ThreadPool::addTask(const job_t& job) {
   pthread_mutex_lock(&mutex);
   m_taskQueue.push(job);
-  pthread_cond_signal(&cond);
   pthread_mutex_unlock(&mutex);
+  pthread_cond_signal(&cond);
 }
 
-
-#endif
