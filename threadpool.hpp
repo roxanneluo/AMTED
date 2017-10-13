@@ -10,12 +10,13 @@
 // pipe file descriptor
 using pfd_t = int;
 
+
 class ThreadPool {
  public:
   ThreadPool(int n);
 
   const std::vector<pfd_t>& inputPipes() const {
-    return input_pipes;
+    return m_inputPipes;
   }
 
   template <typename Func>
@@ -29,8 +30,19 @@ class ThreadPool {
  protected:
   std::vecor<pfd_t> m_inputPipes;
   std::queue<TP>    m_inactiveThreads;
-  // TODO: lock
+  std::queue<Func>  m_taskQueue;
+
+  /**
+   * thread condition variable.
+   */
+  pthread_cond_t cond;
+
+  /**
+   * thread mutex lock.
+   */
+  pthread_mutex_t mutex;
 };
+
 
 
 #endif
