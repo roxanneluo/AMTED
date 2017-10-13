@@ -16,7 +16,7 @@
 
 #define PORT "3490" // the port client will be connecting to 
 
-#define MAXDATASIZE 100 // max number of bytes we can get at once 
+#define MAXDATASIZE 1000
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -78,17 +78,17 @@ int main(int argc, char *argv[])
 
 	freeaddrinfo(servinfo); // all done with this structure
 
-  char buffer[] = "test.txt";
-  numbytes = send(sockfd, buffer, sizeof(buffer), 0); 
+  char buffer[] = "client.c";
+  numbytes = send(sockfd, buffer, sizeof(buffer), 0);
 
-	if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
-	    perror("recv");
-	    exit(1);
-	}
-
-	buf[numbytes] = '\0';
-
-	printf("client: received '%s'\n",buf);
+  while (1) {
+    memset(buf, 0, sizeof buf);
+    int len = recv(sockfd, buf, sizeof buf, 0);
+    if (len <= 0) {
+      break;
+    }
+    printf("%s", buf);
+  }
 
 	close(sockfd);
 

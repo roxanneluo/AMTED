@@ -82,11 +82,8 @@ ThreadPool::ThreadPool(int N)
   : m_threads(N) {
   constexpr int kRead = 0, kWrite = 1;
   
-  printf("create cond\n");
   pthread_cond_init(&cond, NULL);
-  printf("create mutex");
   pthread_mutex_init(&mutex, NULL);
-  printf("done create mutex");
 
   static auto args_arr = std::make_unique<arg_struct[]>(N); 
 
@@ -113,7 +110,6 @@ ThreadPool::~ThreadPool() {
   for (int i = 0; i < m_threads.size(); ++i) {
     pthread_join(m_threads[i], NULL);
   }
-  printf("destroy\n");
   pthread_mutex_destroy(&mutex);
   pthread_cond_destroy(&cond);
 }

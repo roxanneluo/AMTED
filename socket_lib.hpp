@@ -154,9 +154,8 @@ bool sendData(cfd_t cfd, ClientState* client) {
   while (1) {
     ssize_t count = send(cfd, client->buffer + client->write_offset,
         client->size - client->write_offset, 0);
-    if (count == -1 && errno != EAGAIN && errno != EWOULDBLOCK) return false;
-
     printf("sending %d bytes\n", count);
+    if (count == -1 && errno != EAGAIN && errno != EWOULDBLOCK) return false;
 
     client->write_offset += count;
     if (count == -1) return false;
